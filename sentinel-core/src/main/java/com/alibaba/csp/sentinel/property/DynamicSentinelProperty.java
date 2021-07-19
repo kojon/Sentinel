@@ -37,6 +37,7 @@ public class DynamicSentinelProperty<T> implements SentinelProperty<T> {
     @Override
     public void addListener(PropertyListener<T> listener) {
         listeners.add(listener);
+        //会调用RulePropertyListener这个类的reloadFrom(…)方法
         listener.configLoad(value);
     }
 

@@ -17,6 +17,7 @@ package com.alibaba.csp.sentinel.slots.block.flow.controller;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.alibaba.csp.sentinel.config.SentinelConfig;
 import com.alibaba.csp.sentinel.util.TimeUtil;
 import com.alibaba.csp.sentinel.node.Node;
 import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
@@ -62,14 +63,22 @@ import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
  * @author jialiang.linjl
  */
 public class WarmUpController implements TrafficShapingController {
-
+    // 阈值
     protected double count;
+    /**
+     * 冷启动的因子 ，默认为3 {@link SentinelConfig#coldFactor()}
+     */
     private int coldFactor;
+    // 转折点的令牌数
     protected int warningToken = 0;
+    // 最大令牌数
     private int maxToken;
+    // 折线初始斜率，标志流量的变化程度
     protected double slope;
 
+    // 累积的令牌数 ,累积的令牌数越多，说明系统利用率越低，说明当前流量低，是冷状态
     protected AtomicLong storedTokens = new AtomicLong(0);
+    // 最后更新令牌的时间
     protected AtomicLong lastFilledTime = new AtomicLong(0);
 
     public WarmUpController(double count, int warmUpPeriodInSec, int coldFactor) {
@@ -92,15 +101,16 @@ public class WarmUpController implements TrafficShapingController {
 
         // thresholdPermits = 0.5 * warmupPeriod / stableInterval.
         // warningToken = 100;
+
+        // 按默认的warmUpPeriodInSec = 10，表示1秒钟10个请求，则每个请求为间隔stableInterval = 100ms，
+        // 那么coldInterval=stableInterval * coldFactor = 100 * 3 = 300ms
         warningToken = (int)(warmUpPeriodInSec * count) / (coldFactor - 1);
         // / maxPermits = thresholdPermits + 2 * warmupPeriod /
         // (stableInterval + coldInterval)
         // maxToken = 200
         maxToken = warningToken + (int)(2 * warmUpPeriodInSec * count / (1.0 + coldFactor));
 
-        // slope
-        // slope = (coldIntervalMicros - stableIntervalMicros) / (maxPermits
-        // - thresholdPermits);
+        //坡度  倾斜率
         slope = (coldFactor - 1.0) / count / (maxToken - warningToken);
 
     }
@@ -112,23 +122,33 @@ public class WarmUpController implements TrafficShapingController {
 
     @Override
     public boolean canPass(Node node, int acquireCount, boolean prioritized) {
+        // 当前已经通过的qps
         long passQps = (long) node.passQps();
 
+        // 上一个滑动窗口的qps
         long previousQps = (long) node.previousPassQps();
+        // 同步令牌，如果是出于冷启动或预热完毕状态，则考虑要添加令牌
         syncToken(previousQps);
 
         // 开始计算它的斜率
         // 如果进入了警戒线，开始调整他的qps
         long restToken = storedTokens.get();
-        if (restToken >= warningToken) {
+        if (restToken >= warningToken) {//预热模式
+            // 说明一瞬间有大流量过来，消耗了大量的存储令牌，造成剩余令牌数第一警戒值，则要开启预热默认，逐渐增加qps
+
+            /** 计算当前离警戒线的距离 **/
             long aboveToken = restToken - warningToken;
+
             // 消耗的速度要比warning快，但是要比慢
             // current interval = restToken*slope+1/count
+            // restToken越小，interval就越小，表示系统越热
+            // 随着aboveToken的减小，warningQps会逐渐增大
             double warningQps = Math.nextUp(1.0 / (aboveToken * slope + 1.0 / count));
             if (passQps + acquireCount <= warningQps) {
+                // 随着warningQps的增大，acquireCount = 1，那么passQps允许的范围就变大，相应的流量就越大，系统越热
                 return true;
             }
-        } else {
+        } else {//进入正常请求阶段
             if (passQps + acquireCount <= count) {
                 return true;
             }
@@ -139,38 +159,51 @@ public class WarmUpController implements TrafficShapingController {
 
     protected void syncToken(long passQps) {
         long currentTime = TimeUtil.currentTimeMillis();
+        // 把当前时间的后三位置为0 e.g. 1601456312835 = 1601456312835 - 1601456312835 % 1000 = 1601456312000
         currentTime = currentTime - currentTime % 1000;
+        // 获取上一次更新令牌的时间
         long oldLastFillTime = lastFilledTime.get();
         if (currentTime <= oldLastFillTime) {
             return;
         }
 
+        // 获得目前的令牌数
         long oldValue = storedTokens.get();
+        // 获取新的令牌数
         long newValue = coolDownTokens(currentTime, passQps);
 
+        // 更新累积令牌数
         if (storedTokens.compareAndSet(oldValue, newValue)) {
+            // 去除上一次的qps，设置剩下的令牌数
             long currentValue = storedTokens.addAndGet(0 - passQps);
             if (currentValue < 0) {
+                // 如果剩下的令牌数小于0，则置为0。
                 storedTokens.set(0L);
             }
+            // 设置令牌更新时间
             lastFilledTime.set(currentTime);
         }
 
     }
 
     private long coolDownTokens(long currentTime, long passQps) {
+        // 当前拥有的令牌数
         long oldValue = storedTokens.get();
         long newValue = oldValue;
 
         // 添加令牌的判断前提条件:
         // 当令牌的消耗程度远远低于警戒线的时候
-        if (oldValue < warningToken) {
+        if (oldValue < warningToken) {// 这种情况表示已经预热结束，可以开始生成令牌了
+            // 这里按照count = 100来计算的话，表示旧值oldValue + 距离上次更新的秒数时间差 * count ，表示每秒增加count个令牌
+            // 这里的currentTime 和 lastFilledTime.get() 都是已经去掉毫秒数的
             newValue = (long)(oldValue + (currentTime - lastFilledTime.get()) * count / 1000);
-        } else if (oldValue > warningToken) {
-            if (passQps < (int)count / coldFactor) {
+        } else if (oldValue > warningToken) {// 进入这里表示当前是冷状态或正处于预热状态
+            if (passQps < (int)count / coldFactor) { // 如果是冷状态，则补充令牌数，避免令牌数为0
                 newValue = (long)(oldValue + (currentTime - lastFilledTime.get()) * count / 1000);
             }
+            // 预热阶段则不添加令牌数，从而限制流量的急剧攀升
         }
+        // 限制令牌数不能超过最大令牌数maxToken
         return Math.min(newValue, maxToken);
     }
 

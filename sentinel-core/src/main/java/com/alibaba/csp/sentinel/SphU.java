@@ -22,6 +22,7 @@ import com.alibaba.csp.sentinel.slots.block.Rule;
 import com.alibaba.csp.sentinel.slots.system.SystemRule;
 
 /**
+ *
  * <p>The fundamental Sentinel API for recording statistics and performing rule checking for resources.</p>
  * <p>
  * Conceptually, physical or logical resource that need protection should be

@@ -24,6 +24,7 @@ import com.alibaba.csp.sentinel.util.TimeUtil;
  * @author jialiang.linjl
  * @since 1.4.0
  */
+//匀速排队模式和预热模式的结合
 public class WarmUpRateLimiterController extends WarmUpController {
 
     private final int timeoutInMs;

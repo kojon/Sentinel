@@ -39,10 +39,13 @@ import com.alibaba.csp.sentinel.util.TimeUtil;
  * @author Carpenter Lee
  */
 public abstract class LeapArray<T> {
-
+//    每一个窗口的时间间隔，单位为毫秒。
     protected int windowLengthInMs;
+//    抽样个数，就一个统计时间间隔中包含的滑动窗口个数
     protected int sampleCount;
+//    一个统计的时间间隔。
     protected int intervalInMs;
+//    间隔周期
     private double intervalInSecond;
 
     protected final AtomicReferenceArray<WindowWrap<T>> array;
@@ -117,9 +120,12 @@ public abstract class LeapArray<T> {
         if (timeMillis < 0) {
             return null;
         }
-
+//        1：计算当前时间会落在一个采集间隔 ( LeapArray ) 中哪一个时间窗口中，即在 LeapArray 中属性 AtomicReferenceArray > array 的下标。其实现算法如下：
+//            - 首先用当前时间除以一个时间窗口的时间间隔，得出当前时间是多少个时间窗口的倍数，用 n 表示。
+//            - 然后我们可以看出从一系列时间窗口，从 0 开始，一起向前滚动 n 隔得到当前时间戳代表的时间窗口的位置。现在我们要定位到这个时间窗口的位置是落在 LeapArray 中数组的下标，而一个 LeapArray 中包含 sampleCount 个元素，要得到其下标，则使用 n % sampleCount 即可。
         int idx = calculateTimeIdx(timeMillis);
         // Calculate current bucket start time.
+//        2.计算当前时间戳所在的时间窗口的开始时间
         long windowStart = calculateWindowStart(timeMillis);
 
         /*
@@ -130,6 +136,7 @@ public abstract class LeapArray<T> {
          * (3) Bucket is deprecated, then reset current bucket and clean all deprecated buckets.
          */
         while (true) {
+//            3.尝试从 LeapArray 中的 WindowWrap 数组查找指定下标的元素。
             WindowWrap<T> old = array.get(idx);
             if (old == null) {
                 /*
@@ -144,15 +151,21 @@ public abstract class LeapArray<T> {
                  * then try to update circular array via a CAS operation. Only one thread can
                  * succeed to update, while other threads yield its time slice.
                  */
+//                4.如果指定下标的元素为空，则需要创建一个 WindowWrap
                 WindowWrap<T> window = new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
                 if (array.compareAndSet(idx, null, window)) {
                     // Successfully updated, return the created bucket.
+//5.这里使用了 CAS 机制来更新 LeapArray 数组中的 元素，因为同一时间戳，可能有多个线程都在获取当前时间窗口对象，
+//但该时间窗口对象还未创建，这里就是避免创建多个，导致统计数据被覆盖
                     return window;
                 } else {
                     // Contention failed, the thread will yield its time slice to wait for bucket available.
+//                    如果指定索引下的时间窗口对象不为空并判断起始时间相等，则返回
                     Thread.yield();
                 }
             } else if (windowStart == old.windowStart()) {
+                //6.如果原先存在的窗口开始时间小于当前时间戳计算出来的开始时间，则表示 bucket 已被弃用。
+                // 则需要将开始时间重置到新时间戳对应的开始时间戳
                 /*
                  *     B0       B1      B2     B3      B4
                  * ||_______|_______|_______|_______|_______||___
@@ -166,6 +179,8 @@ public abstract class LeapArray<T> {
                  */
                 return old;
             } else if (windowStart > old.windowStart()) {
+                //7.如果原先存在的窗口开始时间小于当前时间戳计算出来的开始时间，则表示 bucket 已被弃用。
+                // 则需要将开始时间重置到新时间戳对应的开始时间戳
                 /*
                  *   (old)
                  *             B0       B1      B2    NULL      B4
@@ -195,6 +210,7 @@ public abstract class LeapArray<T> {
                     Thread.yield();
                 }
             } else if (windowStart < old.windowStart()) {
+                //8.应该不会进入到该分支，因为当前时间算出来时间窗口不会比之前的小。
                 // Should not go through here, as the provided time is already behind.
                 return new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
             }

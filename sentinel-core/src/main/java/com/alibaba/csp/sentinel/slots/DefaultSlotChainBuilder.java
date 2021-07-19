@@ -35,16 +35,19 @@ public class DefaultSlotChainBuilder implements SlotChainBuilder {
 
     @Override
     public ProcessorSlotChain build() {
+        // 定义链路起点
         ProcessorSlotChain chain = new DefaultProcessorSlotChain();
 
         // Note: the instances of ProcessorSlot should be different, since they are not stateless.
+        // 基于spi扩展机制，加载ProcessorSlot的实现类，从META-INF/services/com.alibaba.csp.sentinel.slotchain.ProcessorSlot文件下获取，并且按指定顺序排序
         List<ProcessorSlot> sortedSlotList = SpiLoader.loadPrototypeInstanceListSorted(ProcessorSlot.class);
+        // 遍历构建链路
         for (ProcessorSlot slot : sortedSlotList) {
             if (!(slot instanceof AbstractLinkedProcessorSlot)) {
                 RecordLog.warn("The ProcessorSlot(" + slot.getClass().getCanonicalName() + ") is not an instance of AbstractLinkedProcessorSlot, can't be added into ProcessorSlotChain");
                 continue;
             }
-
+            // 将slot节点加入链，因为已经排好序了，只需要加到最后即可
             chain.addLast((AbstractLinkedProcessorSlot<?>) slot);
         }
 

@@ -151,10 +151,13 @@ public class DefaultClusterTokenClient implements ClusterTokenClient {
         if (notValidRequest(flowId, acquireCount)) {
             return badRequest();
         }
+        //计数器
         FlowRequestData data = new FlowRequestData().setCount(acquireCount)
             .setFlowId(flowId).setPriority(prioritized);
+        //组装请求
         ClusterRequest<FlowRequestData> request = new ClusterRequest<>(ClusterConstants.MSG_TYPE_FLOW, data);
         try {
+            //发送获取token请求
             TokenResult result = sendTokenRequest(request);
             logForResult(result);
             return result;

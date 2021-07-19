@@ -160,6 +160,7 @@ public class FlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
     @Override
     public void entry(Context context, ResourceWrapper resourceWrapper, DefaultNode node, int count,
                       boolean prioritized, Object... args) throws Throwable {
+        // 检查限流规则
         checkFlow(resourceWrapper, context, node, count, prioritized);
 
         fireEntry(context, resourceWrapper, node, count, prioritized, args);
@@ -167,6 +168,7 @@ public class FlowSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
 
     void checkFlow(ResourceWrapper resource, Context context, DefaultNode node, int count, boolean prioritized)
         throws BlockException {
+        //具体处理方法 go in
         checker.checkFlow(ruleProvider, resource, context, node, count, prioritized);
     }
 

@@ -116,28 +116,34 @@ public class CtSph implements Sph {
 
     private Entry entryWithPriority(ResourceWrapper resourceWrapper, int count, boolean prioritized, Object... args)
         throws BlockException {
+        // 从threadLocal中获取当前线程对应的context实例。
         Context context = ContextUtil.getContext();
         if (context instanceof NullContext) {
             // The {@link NullContext} indicates that the amount of context has exceeded the threshold,
             // so here init the entry only. No rule checking will be done.
+            // 如果context是nullContext的实例，表示当前context的总数已经达到阈值，所以这里直接创建entry实例，并返回，不进行规则的检查。
             return new CtEntry(resourceWrapper, null, context);
         }
 
         if (context == null) {
             // Using default context.
+            //如果context为空，则使用默认的名字创建一个，就是外部在调用SphU.entry(..)方法前如果没有调用ContextUtil.enter(..)，则这里会调用该方法进行内部初始化context
             context = InternalContextUtil.internalEnter(Constants.CONTEXT_DEFAULT_NAME);
         }
 
         // Global switch is close, no rule checking will do.
+        // 总开关
         if (!Constants.ON) {
             return new CtEntry(resourceWrapper, null, context);
         }
 
+        // 构造链路（核心实现） go to
         ProcessorSlot<Object> chain = lookProcessChain(resourceWrapper);
 
         /*
          * Means amount of resources (slot chain) exceeds {@link Constants.MAX_SLOT_CHAIN_SIZE},
          * so no rule checking will be done.
+         * 当链的大小达到阈值Constants.MAX_SLOT_CHAIN_SIZE时，不会校验任何规则，直接返回。
          */
         if (chain == null) {
             return new CtEntry(resourceWrapper, null, context);
@@ -145,6 +151,7 @@ public class CtSph implements Sph {
 
         Entry e = new CtEntry(resourceWrapper, chain, context);
         try {
+            // 开始进行链路调用。
             chain.entry(context, resourceWrapper, null, count, prioritized, args);
         } catch (BlockException e1) {
             e.exit(count, args);
@@ -192,16 +199,20 @@ public class CtSph implements Sph {
      * @return {@link ProcessorSlotChain} of the resource
      */
     ProcessorSlot<Object> lookProcessChain(ResourceWrapper resourceWrapper) {
+        //在上下文中每一个资源都有各自的处理槽
         ProcessorSlotChain chain = chainMap.get(resourceWrapper);
+        // 双重检查锁保证线程安全
         if (chain == null) {
             synchronized (LOCK) {
                 chain = chainMap.get(resourceWrapper);
                 if (chain == null) {
                     // Entry size limit.
+                    // 当链的长度达到阈值时，直接返回null，不进行规则的检查。
                     if (chainMap.size() >= Constants.MAX_SLOT_CHAIN_SIZE) {
                         return null;
                     }
 
+                    // 构建链路 go in
                     chain = SlotChainProvider.newSlotChain();
                     Map<ResourceWrapper, ProcessorSlotChain> newMap = new HashMap<ResourceWrapper, ProcessorSlotChain>(
                         chainMap.size() + 1);

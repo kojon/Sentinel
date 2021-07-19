@@ -42,8 +42,11 @@ public final class RuleConstant {
     public static final int AUTHORITY_WHITE = 0;
     public static final int AUTHORITY_BLACK = 1;
 
+    /**根据调用方进行限流 **/
     public static final int STRATEGY_DIRECT = 0;
+    /**根据关联流量限流**/
     public static final int STRATEGY_RELATE = 1;
+    /**根据调用链路入口限流**/
     public static final int STRATEGY_CHAIN = 2;
 
     public static final int CONTROL_BEHAVIOR_DEFAULT = 0;

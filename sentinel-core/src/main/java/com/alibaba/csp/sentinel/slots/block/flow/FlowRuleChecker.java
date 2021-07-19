@@ -46,9 +46,12 @@ public class FlowRuleChecker {
         if (ruleProvider == null || resource == null) {
             return;
         }
+        // 根据资源名称找到对应的规则
         Collection<FlowRule> rules = ruleProvider.apply(resource.getName());
         if (rules != null) {
+            // 遍历规则，依次判断是否通过
             for (FlowRule rule : rules) {
+                //具体校验
                 if (!canPassCheck(rule, context, node, count, prioritized)) {
                     throw new FlowException(rule.getLimitApp(), rule);
                 }
@@ -67,21 +70,23 @@ public class FlowRuleChecker {
         if (limitApp == null) {
             return true;
         }
-
+        // 集群限流的判断
         if (rule.isClusterMode()) {
             return passClusterCheck(rule, context, node, acquireCount, prioritized);
         }
-
+        // 本地节点的判断
         return passLocalCheck(rule, context, node, acquireCount, prioritized);
     }
 
     private static boolean passLocalCheck(FlowRule rule, Context context, DefaultNode node, int acquireCount,
                                           boolean prioritized) {
+        // 根据请求的信息及策略，选择不同的node节点 go to
         Node selectedNode = selectNodeByRequesterAndStrategy(rule, context, node);
         if (selectedNode == null) {
             return true;
         }
-
+        // 根据当前规则，获取规则控制器，调用canPass方法进行判断
+//        rule.getRater()返回的是TrafficShapingController接口的实现类，使用了策略模式，根据使用的控制措施来选择使用哪种实现
         return rule.getRater().canPass(selectedNode, acquireCount, prioritized);
     }
 
@@ -92,11 +97,11 @@ public class FlowRuleChecker {
         if (StringUtil.isEmpty(refResource)) {
             return null;
         }
-
+        //根据关联流量限流。
         if (strategy == RuleConstant.STRATEGY_RELATE) {
             return ClusterBuilderSlot.getClusterNode(refResource);
         }
-
+        //根据调用链路入口限流。
         if (strategy == RuleConstant.STRATEGY_CHAIN) {
             if (!refResource.equals(context.getName())) {
                 return null;
@@ -118,7 +123,10 @@ public class FlowRuleChecker {
         int strategy = rule.getStrategy();
         String origin = context.getOrigin();
 
+        // 判断调用来源，这种情况下origin不能为default或other
         if (limitApp.equals(origin) && filterOrigin(origin)) {
+            //针对特定的调用者  不是系统规定的default或other
+            // 如果调用关系策略为STRATEGY_DIRECT，表示仅判断自己，则返回origin statistic node.
             if (strategy == RuleConstant.STRATEGY_DIRECT) {
                 // Matches limit origin, return origin statistic node.
                 return context.getOriginNode();
@@ -126,18 +134,21 @@ public class FlowRuleChecker {
 
             return selectReferenceNode(rule, context, node);
         } else if (RuleConstant.LIMIT_APP_DEFAULT.equals(limitApp)) {
+            //default 表示不区分调用者，来自任何调用者的请求都将进行限流统计。
+            // 如果调用来源为default默认的
             if (strategy == RuleConstant.STRATEGY_DIRECT) {
+                // 如果调用关系策略为STRATEGY_DIRECT，则返回clusterNode
                 // Return the cluster node.
                 return node.getClusterNode();
             }
-
+            // 采用调用来源进行判断的策略
             return selectReferenceNode(rule, context, node);
         } else if (RuleConstant.LIMIT_APP_OTHER.equals(limitApp)
             && FlowRuleManager.isOtherOrigin(origin, rule.getResource())) {
+            // 出系统默认以外的其他
             if (strategy == RuleConstant.STRATEGY_DIRECT) {
                 return context.getOriginNode();
             }
-
             return selectReferenceNode(rule, context, node);
         }
 
@@ -147,8 +158,10 @@ public class FlowRuleChecker {
     private static boolean passClusterCheck(FlowRule rule, Context context, DefaultNode node, int acquireCount,
                                             boolean prioritized) {
         try {
+            //获取token服务
             TokenService clusterService = pickClusterService();
             if (clusterService == null) {
+                //非集群回退到本地模式
                 return fallbackToLocalOrPass(rule, context, node, acquireCount, prioritized);
             }
             long flowId = rule.getClusterConfig().getFlowId();

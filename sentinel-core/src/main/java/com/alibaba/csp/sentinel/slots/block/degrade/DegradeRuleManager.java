@@ -50,6 +50,7 @@ public final class DegradeRuleManager {
         = new DynamicSentinelProperty<>();
 
     static {
+        //会调用监听器的configLoad(…)方法，最终会调用RulePropertyListener这个类的reloadFrom(…)方法
         currentProperty.addListener(LISTENER);
     }
 
@@ -203,6 +204,7 @@ public final class DegradeRuleManager {
 
     private static class RulePropertyListener implements PropertyListener<List<DegradeRule>> {
 
+        //解析将规则根据资源名称进行归类，并保存为map格式
         private synchronized void reloadFrom(List<DegradeRule> list) {
             Map<String, List<CircuitBreaker>> cbs = buildCircuitBreakers(list);
             Map<String, Set<DegradeRule>> rm = new HashMap<>(cbs.size());

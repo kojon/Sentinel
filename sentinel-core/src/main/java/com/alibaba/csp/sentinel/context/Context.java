@@ -63,11 +63,13 @@ public class Context {
 
     /**
      * The entrance node of current invocation tree.
+     * 入口节点
      */
     private DefaultNode entranceNode;
 
     /**
      * Current processing entry.
+     * 当前入口
      */
     private Entry curEntry;
 

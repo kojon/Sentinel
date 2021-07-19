@@ -36,6 +36,7 @@ public class LogSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
         try {
             fireEntry(context, resourceWrapper, obj, count, prioritized, args);
         } catch (BlockException e) {
+            // 当抛出BlockException异常时，这里会输入日志信息
             EagleEyeLogUtil.log(resourceWrapper.getName(), e.getClass().getSimpleName(), e.getRuleLimitApp(),
                 context.getOrigin(), count);
             throw e;

@@ -215,16 +215,16 @@ public class NettyTransportClient implements ClusterTransportClient {
         int xid = getCurrentId();
         try {
             request.setId(xid);
-
+            //通过netty发送请求
             channel.writeAndFlush(request);
-
+            //拿到请求结果
             ChannelPromise promise = channel.newPromise();
             TokenClientPromiseHolder.putPromise(xid, promise);
 
             if (!promise.await(ClusterClientConfigManager.getRequestTimeout())) {
                 throw new SentinelClusterException(ClusterErrorMessages.REQUEST_TIME_OUT);
             }
-
+            //组装数据 返回
             SimpleEntry<ChannelPromise, ClusterResponse> entry = TokenClientPromiseHolder.getEntry(xid);
             if (entry == null || entry.getValue() == null) {
                 // Should not go through here.

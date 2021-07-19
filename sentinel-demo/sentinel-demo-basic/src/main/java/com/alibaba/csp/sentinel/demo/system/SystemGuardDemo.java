@@ -15,6 +15,7 @@
  */
 package com.alibaba.csp.sentinel.demo.system;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,7 +42,7 @@ public class SystemGuardDemo {
     private static volatile boolean stop = false;
     private static final int threadCount = 100;
 
-    private static int seconds = 60 + 40;
+    private static int seconds = 100;
 
     public static void main(String[] args) throws Exception {
 

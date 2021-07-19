@@ -46,6 +46,7 @@ import com.alibaba.csp.sentinel.spi.SpiOrder;
  * @author jialiang.linjl
  */
 @SpiOrder(-9000)
+//用于构建clustNode的源节点，clustNode保持某个资源运行中的统计信息（RT QPS BLOCKcount 线程数，异常数）
 public class ClusterBuilderSlot extends AbstractLinkedProcessorSlot<DefaultNode> {
 
     /**

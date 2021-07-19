@@ -41,6 +41,7 @@ public final class SlotChainProvider {
         }
 
         // Resolve the slot chain builder SPI.
+        // 基于spi扩展点机制来扩展，默认为DefaultSlotChainBuilder ( go to)
         slotChainBuilder = SpiLoader.loadFirstInstanceOrDefault(SlotChainBuilder.class, DefaultSlotChainBuilder.class);
 
         if (slotChainBuilder == null) {
@@ -51,6 +52,7 @@ public final class SlotChainProvider {
             RecordLog.info("[SlotChainProvider] Global slot chain builder resolved: {}",
                 slotChainBuilder.getClass().getCanonicalName());
         }
+        // 链路构建
         return slotChainBuilder.build();
     }
 
